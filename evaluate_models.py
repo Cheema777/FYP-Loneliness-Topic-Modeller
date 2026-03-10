@@ -4,12 +4,28 @@ from bertopic import BERTopic
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, f1_score
 from warnings import filterwarnings
+import sys
 
 # Suppress warnings for cleaner output
 filterwarnings('ignore')
 
 print("Loading test dataset...")
 test_df = pd.read_csv('data/test_dataset.csv')
+
+# Check if True_Theme is filled out
+if test_df['True_Theme'].isnull().all() or (test_df['True_Theme'] == "").all():
+    print("\nERROR: The 'True_Theme' column in 'data/test_dataset.csv' is empty.")
+    print("Please manually fill in the true themes for the 200 rows before running this script.")
+    print("Valid themes are:")
+    print(" - Emotional Distress")
+    print(" - Situational Factors")
+    print(" - Existential Loneliness")
+    print(" - Social Connection")
+    print(" - Communication Barriers")
+    sys.exit(1)
+
+# Drop any rows where True_Theme might still be empty to avoid math errors
+test_df = test_df.dropna(subset=['True_Theme'])
 texts = test_df['Text'].tolist()
 true_labels = test_df['True_Theme'].tolist()
 
@@ -48,8 +64,6 @@ for row in lda_raw:
     predictions['LDA'].append(THEME_LABELS.get(assigned_id, "Unclassified"))
 
 print("Running BERTopic Predictions...")
-# Since we used BERTopic as ground truth, it should score 100%, 
-# but we run it anyway for completeness of script logic.
 found_topics, probabilities = bert_engine.transform(texts)
 for i in range(len(texts)):
     if found_topics[i] != -1:
@@ -65,8 +79,8 @@ print("="*50)
 for model_name, preds in predictions.items():
     acc = accuracy_score(true_labels, preds)
     # Using 'weighted' since themes might be imbalanced
-    prec = precision_score(true_labels, preds, average='weighted')
-    f1 = f1_score(true_labels, preds, average='weighted')
+    prec = precision_score(true_labels, preds, average='weighted', zero_division=0)
+    f1 = f1_score(true_labels, preds, average='weighted', zero_division=0)
     
     print(f"\n{model_name} Model:")
     print(f"  Accuracy:  {acc:.4f} ({acc*100:.2f}%)")

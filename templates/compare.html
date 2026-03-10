@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Comparison — Loneliness Topic Modeller</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+
+        body {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        .main-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-weight: 800;
+            font-size: 2.2rem;
+            background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .page-header p {
+            color: #8e8ea0;
+            font-size: 0.95rem;
+        }
+
+        /* Glass cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 30px;
+            transition: transform 0.2s ease;
+        }
+        .glass-card:hover {
+            transform: translateY(-2px);
+        }
+        .glass-card h3 {
+            font-weight: 700;
+            font-size: 1.15rem;
+            margin-bottom: 20px;
+            color: #ffffff;
+        }
+
+        /* Metrics table */
+        .metrics-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .metrics-table thead th {
+            background: rgba(123, 47, 247, 0.2);
+            color: #c9b0ff;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 14px 18px;
+            border: none;
+        }
+        .metrics-table thead th:first-child { border-radius: 12px 0 0 0; }
+        .metrics-table thead th:last-child { border-radius: 0 12px 0 0; }
+        .metrics-table tbody td {
+            padding: 14px 18px;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #d0d0d0;
+        }
+        .metrics-table tbody tr:last-child td:first-child { border-radius: 0 0 0 12px; }
+        .metrics-table tbody tr:last-child td:last-child { border-radius: 0 0 12px 0; }
+        .metrics-table tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .model-name {
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .best-score {
+            color: #00e676;
+            font-weight: 700;
+        }
+
+        /* Confusion matrix */
+        .cm-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        @media (max-width: 992px) {
+            .cm-grid { grid-template-columns: 1fr; }
+        }
+        .cm-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 20px;
+        }
+        .cm-card h5 {
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+        .cm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+        }
+        .cm-table th, .cm-table td {
+            text-align: center;
+            padding: 6px 4px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .cm-table th {
+            color: #a0a0c0;
+            font-weight: 600;
+            font-size: 0.65rem;
+        }
+        .cm-table .row-label {
+            text-align: right;
+            padding-right: 8px;
+            color: #a0a0c0;
+            font-weight: 600;
+            font-size: 0.65rem;
+            white-space: nowrap;
+        }
+
+        /* Chart */
+        .chart-wrapper {
+            position: relative;
+            height: 320px;
+        }
+
+        /* Back button */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #8e8ea0;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+            margin-bottom: 20px;
+        }
+        .back-btn:hover { color: #00d2ff; }
+
+        .badge-model {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .badge-nmf { background: rgba(0,210,255,0.2); color: #00d2ff; }
+        .badge-lda { background: rgba(123,47,247,0.2); color: #b388ff; }
+        .badge-bert { background: rgba(0,230,118,0.2); color: #00e676; }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <a href="/" class="back-btn">← Back to Analyzer</a>
+
+    <div class="page-header">
+        <h1>Model Performance Comparison</h1>
+        <p>Evaluating NMF, LDA & BERTopic on {{ metrics['NMF']['accuracy'] | default('—') }} test samples across 5 loneliness themes</p>
+    </div>
+
+    <!-- METRICS TABLE -->
+    <div class="glass-card">
+        <h3>📊 Evaluation Metrics (Weighted Averages)</h3>
+        <table class="metrics-table">
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1-Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set metric_keys = ['accuracy', 'precision', 'recall', 'f1'] %}
+                {% set models = metrics.keys() | list %}
+                {% for model in models %}
+                <tr>
+                    <td>
+                        <span class="model-name">{{ model }}</span>
+                        <span class="badge-model {% if model == 'NMF' %}badge-nmf{% elif model == 'LDA' %}badge-lda{% else %}badge-bert{% endif %} ms-2">
+                            {% if model == 'NMF' %}Word Patterns{% elif model == 'LDA' %}Probabilistic{% else %}Transformer{% endif %}
+                        </span>
+                    </td>
+                    {% for mk in metric_keys %}
+                        {% set vals = [] %}
+                        {% for m in models %}
+                            {% if vals.append(metrics[m][mk]) %}{% endif %}
+                        {% endfor %}
+                        {% set best = vals | max %}
+                        <td class="{% if metrics[model][mk] == best %}best-score{% endif %}">
+                            {{ metrics[model][mk] }}%
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- GROUPED BAR CHART -->
+    <div class="glass-card">
+        <h3>📈 Visual Comparison</h3>
+        <div class="chart-wrapper">
+            <canvas id="comparisonChart"></canvas>
+        </div>
+    </div>
+
+    <!-- CONFUSION MATRICES -->
+    <div class="glass-card">
+        <h3>🔢 Confusion Matrices <span style="font-weight:400; font-size:0.8rem; color:#8e8ea0;">(Rows = True, Columns = Predicted)</span></h3>
+        <div class="cm-grid">
+            {% for model_name, cm in conf_matrices.items() %}
+            <div class="cm-card">
+                <h5>
+                    <span class="badge-model {% if model_name == 'NMF' %}badge-nmf{% elif model_name == 'LDA' %}badge-lda{% else %}badge-bert{% endif %}">{{ model_name }}</span>
+                </h5>
+                <table class="cm-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            {% for tn in theme_names %}
+                            <th>{{ tn[:6] }}.</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for i in range(theme_names | length) %}
+                        <tr>
+                            <td class="row-label">{{ theme_names[i][:8] }}.</td>
+                            {% for j in range(theme_names | length) %}
+                                {% set val = cm[i][j] %}
+                                {% set max_val = cm | map('max') | max %}
+                                {% set intensity = (val / max_val * 0.9) if max_val > 0 else 0 %}
+                                {% if i == j %}
+                                    <td style="background: rgba(0, 230, 118, {{ intensity }}); color: {% if intensity > 0.5 %}#000{% else %}#ccc{% endif %}; font-weight: 700;">{{ val }}</td>
+                                {% else %}
+                                    <td style="background: rgba(255, 82, 82, {{ intensity }}); color: {% if intensity > 0.5 %}#000{% else %}#ccc{% endif %};">{{ val }}</td>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    const metricsData = {{ metrics | tojson }};
+    const modelNames = Object.keys(metricsData);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+            datasets: modelNames.map((name, i) => {
+                const colors = [
+                    { bg: 'rgba(0,210,255,0.7)', border: '#00d2ff' },
+                    { bg: 'rgba(123,47,247,0.7)', border: '#7b2ff7' },
+                    { bg: 'rgba(0,230,118,0.7)', border: '#00e676' }
+                ];
+                return {
+                    label: name,
+                    data: [
+                        metricsData[name].accuracy,
+                        metricsData[name].precision,
+                        metricsData[name].recall,
+                        metricsData[name].f1
+                    ],
+                    backgroundColor: colors[i].bg,
+                    borderColor: colors[i].border,
+                    borderWidth: 2,
+                    borderRadius: 6
+                };
+            })
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { color: '#8e8ea0', callback: v => v + '%' },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                },
+                x: {
+                    ticks: { color: '#8e8ea0', font: { weight: '600' } },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#d0d0d0',
+                        font: { weight: '600' },
+                        usePointStyle: true,
+                        pointStyle: 'rectRounded',
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.raw}%`
+                    }
+                }
+            }
+        }
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

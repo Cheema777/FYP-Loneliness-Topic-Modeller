@@ -1,58 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loneliness Topic Modeller - FYP</title>
-    
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <style>
         /* Scaled down the page slightly so the dashboard fits on 13-inch laptop screens */
-        body { 
-            background-color: #f1f3f5; 
-            zoom: 0.85; /* Works in Chrome/Edge */
-            -moz-transform: scale(0.85); /* Fallback for Firefox */
+        body {
+            background-color: #f1f3f5;
+            zoom: 0.85;
+            /* Works in Chrome/Edge */
+            -moz-transform: scale(0.85);
+            /* Fallback for Firefox */
             -moz-transform-origin: top center;
         }
-        
+
         /* Main wrapper to keep everything centered */
-        .main-container { 
-            max-width: 1200px; 
+        .main-container {
+            max-width: 1200px;
             margin: 40px auto;
         }
-        
-        .card { 
-            border-radius: 16px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+
+        .card {
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
             border: none;
             background-color: #ffffff;
         }
-        
+
         /* Custom scrollbar for the history table so it doesn't look clunky */
         .history-scroll {
-            max-height: 650px; 
+            max-height: 650px;
             overflow-y: auto;
             padding-right: 10px;
         }
+
         .history-scroll::-webkit-scrollbar {
             width: 6px;
         }
+
         .history-scroll::-webkit-scrollbar-thumb {
             background-color: #ced4da;
             border-radius: 10px;
         }
-        
-        .result-box { 
+
+        .result-box {
             border: 1px solid #dee2e6;
-            background-color: #f8f9fa; 
+            background-color: #f8f9fa;
             border-radius: 12px;
             padding: 1.5rem;
         }
-        
-        .badge-theme { background-color: #0dcaf0; color: #000; }
-        
+
+        .badge-theme {
+            background-color: #0dcaf0;
+            color: #000;
+        }
+
         .chart-container {
             position: relative;
             height: 250px;
@@ -61,126 +69,128 @@
         }
     </style>
 </head>
+
 <body>
 
-<div class="container-fluid main-container">
-    <div class="row g-4">
-        
-        <div class="col-lg-7">
-            <div class="card p-4 h-100">
-                <h2 class="fw-bold mb-4">Loneliness Theme Analyzer</h2>
-                
-                <form action="/predict" method="post">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold text-uppercase small text-muted">Enter Text Narrative:</label>
-                        <textarea class="form-control" name="message" rows="4" required>{{ original_text }}</textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold text-uppercase small text-muted">Select NLP Model:</label>
-                        <select class="form-select" name="model_choice">
-                            <option value="NMF" {% if model_used == 'NMF' %}selected{% endif %}>NMF (Word Pattern Analysis)</option>
-                            <option value="LDA" {% if model_used == 'LDA' %}selected{% endif %}>LDA (Probabilistic Modeling)</option>
-                            <option value="BERTopic" {% if model_used == 'BERTopic' %}selected{% endif %}>BERTopic (Transformer-based Context)</option>
-                        </select>
-                    </div>
-
-                    <div class="d-grid mb-4">
-                        <button type="submit" class="btn btn-primary btn-lg fw-bold">Analyze Topic</button>
-                    </div>
-                </form>
-
-                {% if prediction %}
-                <div class="result-box mt-auto">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="text-primary fw-bold mb-0">Detected Theme:</h5>
-                        <span class="badge bg-dark">{{ model_used }}</span>
-                    </div>
-                    <h2 class="display-6 fw-bold mb-3">{{ prediction }}</h2>
-                    
-                    <p class="small fw-bold text-muted text-uppercase mb-1">Model Confidence Distribution (%)</p>
-                    <div class="chart-container">
-                        <canvas id="confidenceChart"></canvas>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
+    <div class="container-fluid main-container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold mb-0">Loneliness Theme Analyzer</h2>
+            <a href="/compare" class="btn btn-outline-primary btn-sm fw-bold">📊 Model Comparison</a>
         </div>
+        <div class="row g-4">
 
-        <div class="col-lg-5">
-            <div class="card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="fw-bold mb-0">Analysis History</h4>
-                    <form action="/clear" method="post">
-                        <button type="submit" class="btn btn-outline-danger btn-sm">Clear All</button>
+            <div class="col-lg-7">
+                <div class="card p-4 h-100">
+
+                    <form action="/predict" method="post">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-uppercase small text-muted">Enter Text
+                                Narrative:</label>
+                            <textarea class="form-control" name="message" rows="4"
+                                required>{{ original_text }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-uppercase small text-muted">Select NLP Model:</label>
+                            <select class="form-select" name="model_choice">
+                                <option value="NMF" {% if model_used=='NMF' %}selected{% endif %}>NMF (Word Pattern
+                                    Analysis)</option>
+                                <option value="LDA" {% if model_used=='LDA' %}selected{% endif %}>LDA (Probabilistic
+                                    Modeling)</option>
+                                <option value="BERTopic" {% if model_used=='BERTopic' %}selected{% endif %}>BERTopic
+                                    (Transformer-based Context)</option>
+                            </select>
+                        </div>
+
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg fw-bold">Analyze Topic</button>
+                        </div>
                     </form>
+
+                    {% if prediction %}
+                    <div class="result-box mt-auto">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="text-primary fw-bold mb-0">Detected Theme:</h5>
+                            <span class="badge bg-dark">{{ model_used }}</span>
+                        </div>
+                        <h2 class="display-6 fw-bold mb-3">{{ prediction }}</h2>
+
+                        <p class="small fw-bold text-muted text-uppercase mb-1">Model Confidence Distribution (%)</p>
+                        <div class="chart-container">
+                            <canvas id="confidenceChart"></canvas>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
-                
-                <div class="history-scroll">
-                    {% if history %}
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card p-4 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="fw-bold mb-0">Analysis History</h4>
+                        <form action="/clear" method="post">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Clear All</button>
+                        </form>
+                    </div>
+
+                    <div class="history-scroll">
+                        {% if history %}
                         {% for row in history %}
                         <div class="border-bottom py-2">
                             <div class="d-flex justify-content-between align-items-start">
                                 <span class="badge bg-secondary mb-2">{{ row[3] }}</span>
-                                <small class="text-muted">{{ row[1] }}</small> </div>
-                            <p class="mb-1 small">"{{ row[2][:80] }}..."</p> <span class="badge badge-theme small">{{ row[4] }}</span> </div>
+                                <small class="text-muted">{{ row[1] }}</small>
+                            </div>
+                            <p class="mb-1 small">"{{ row[2][:80] }}..."</p> <span class="badge badge-theme small">{{
+                                row[4] }}</span>
+                        </div>
                         {% endfor %}
-                    {% else %}
+                        {% else %}
                         <p class="text-muted small">No history available yet. Run an analysis to start logging.</p>
-                    {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
+
         </div>
 
+        <footer class="text-center mt-4 text-muted small">
+            Topic Modelling for Loneliness
+        </footer>
     </div>
-    
-    <footer class="text-center mt-4 text-muted small">
-        Topic Modelling for Loneliness 
-    </footer>
-</div>
 
-{% if chart_data %}
-<script>
-    // Grab the canvas context
-    const ctx = document.getElementById('confidenceChart').getContext('2d');
-    
-    // Setup the horizontal bar chart
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Emotional Distress', 'Situational Factors', 'Existential', 'Social Connection', 'Comm. Barriers'],
-            datasets: [{
-                label: 'Theme Match Strength (%)',
-                // Use tojson to safely pass Python list to JavaScript array
-                data: {{ chart_data | tojson }},
-                backgroundColor: 'rgba(13, 110, 253, 0.7)', // Bootstrap primary blue
-                borderColor: 'rgba(13, 110, 253, 1)',
-                borderWidth: 1,
-                borderRadius: 5
-            }]
+    {% if chart_data %}
+    <script>
+        const ctx = document.getElementById('confidenceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Emotional Distress', 'Situational Factors', 'Existential', 'Social Connection', 'Comm. Barriers'],
+                datasets: [{
+                    label: 'Theme Match Strength (%)',
+                    data: {{ chart_data | tojson }},
         },
-        options: {
-            indexAxis: 'y', // Makes the bar chart horizontal
+            backgroundColor: 'rgba(13, 110, 253, 0.7)',
+            borderColor: 'rgba(13, 110, 253, 1)',
+            borderWidth: 1,
+            borderRadius: 5
+                }]
+            },
+            options: {
+            indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { 
-                    beginAtZero: true, 
-                    max: 100, // Forces the scale to 100%
-                    grid: { display: false }
-                },
-                y: {
-                    grid: { display: false }
-                }
+                x: { beginAtZero: true, max: 100, grid: { display: false } },
+                y: { grid: { display: false } }
             },
-            plugins: {
-                legend: { display: false } // Hiding the legend to save space
-            }
+            plugins: { legend: { display: false } }
         }
-    });
-</script>
-{% endif %}
+        });
+    </script>
+    {% endif %}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

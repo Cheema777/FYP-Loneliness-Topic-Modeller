@@ -4,6 +4,8 @@ from bertopic import BERTopic
 import sqlite3
 from datetime import datetime
 import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import os
 
 app = Flask(__name__)
@@ -114,6 +116,63 @@ def reset_history():
     conn.commit()
     conn.close()
     return redirect('/')
+
+@app.route('/compare')
+def compare_models():
+    # Load test dataset
+    test_df = pd.read_csv('data/test_dataset.csv')
+    test_df = test_df.dropna(subset=['True_Theme'])
+    texts = test_df['Text'].tolist()
+    true_labels = test_df['True_Theme'].tolist()
+
+    theme_names = list(THEME_LABELS.values())
+
+    # --- Run all 3 models ---
+    predictions = {}
+
+    # NMF
+    text_vectors = vectorizer.transform(texts)
+    nmf_raw = nmf_engine.transform(text_vectors)
+    predictions['NMF'] = [THEME_LABELS.get(int(row.argmax()), "Unclassified") for row in nmf_raw]
+
+    # LDA
+    lda_raw = lda_engine.transform(text_vectors)
+    predictions['LDA'] = [THEME_LABELS.get(int(row.argmax()), "Unclassified") for row in lda_raw]
+
+    # BERTopic
+    found_topics, probabilities = bert_engine.transform(texts)
+    bert_preds = []
+    for i in range(len(texts)):
+        if found_topics[i] != -1:
+            assigned_id = int(found_topics[i])
+        else:
+            assigned_id = int(probabilities[i].argmax())
+        bert_preds.append(THEME_LABELS.get(assigned_id, "Unclassified"))
+    predictions['BERTopic'] = bert_preds
+
+    # --- Compute metrics ---
+    metrics = {}
+    conf_matrices = {}
+    for model_name, preds in predictions.items():
+        acc = accuracy_score(true_labels, preds)
+        prec = precision_score(true_labels, preds, average='weighted', zero_division=0)
+        rec = recall_score(true_labels, preds, average='weighted', zero_division=0)
+        f1 = f1_score(true_labels, preds, average='weighted', zero_division=0)
+        metrics[model_name] = {
+            'accuracy': round(acc * 100, 2),
+            'precision': round(prec * 100, 2),
+            'recall': round(rec * 100, 2),
+            'f1': round(f1 * 100, 2)
+        }
+        # Confusion matrix (rows = true, cols = predicted)
+        cm = confusion_matrix(true_labels, preds, labels=theme_names)
+        conf_matrices[model_name] = cm.tolist()
+
+    return render_template('compare.html',
+                           metrics=metrics,
+                           conf_matrices=conf_matrices,
+                           theme_names=theme_names)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
