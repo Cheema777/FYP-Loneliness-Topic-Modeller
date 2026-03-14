@@ -7,8 +7,16 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
 
 app = Flask(__name__)
+
+# OpenAI client setup
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+GPT_MODEL = "gpt-5-mini-2025-08-07"
 
 # Basic database setup for the history log
 def init_db():
@@ -33,6 +41,8 @@ THEME_LABELS = {
     4: "Communication Barriers"
 }
 
+VALID_THEMES = list(THEME_LABELS.values())
+
 # Load saved models from the /models folder
 try:
     vectorizer = joblib.load('models/vectorizer.pkl')
@@ -47,6 +57,133 @@ except Exception as e:
 def calculate_probabilities(scores):
     exp_s = np.exp(scores - np.max(scores))
     return (exp_s / exp_s.sum()).tolist()
+
+# Shared system prompt for GPT — detailed theme definitions with examples from the dataset
+GPT_SYSTEM_PROMPT = """You are an expert loneliness theme classifier trained on a research dataset about what loneliness means to people. You must classify text into exactly ONE of these 5 loneliness themes:
+
+1. SOCIAL CONNECTION — The person describes lacking people, companionship, friends, family, or someone to spend time with. This is the MOST COMMON theme. Look for: "no one to talk to", "having no friends", "no one around", "being on your own", "not having people", "nobody to share with".
+   Examples:
+   - "Feeling like you have no one to talk to or spend time with or to support you when you are in need."
+   - "When you feel like s...! There is nobody to make you a coffee or around of toast."
+   - "Loneliness means not having another voice/presence there after having them there."
+   - "Not having people around you or available to talk to."
+
+2. COMMUNICATION BARRIERS — The person describes inability to express feelings, not being understood, or lacking mutual understanding and trust. Look for: "no one understands", "can't express", "not being heard", "feeling misunderstood", "unacceptable to say what you think".
+   Examples:
+   - "Having no one to share experiences and dreams with. Feeling like no one understands or values me."
+   - "Loneliness is the experience of not being able to say what one really thinks or feel, because it would be unacceptable."
+   - "An unfulfilled longing for companionship where there is mutual trust and a click of common understanding."
+
+3. EXISTENTIAL LONELINESS — The person describes deep disconnection, alienation, or philosophical emptiness. Look for: "disconnected", "alienation", "empty inside", "cut off from the world", "meaningless".
+   Examples:
+   - "Alienation, no one to share activities with, no one to chat with."
+   - "Feeling disconnected from others."
+   - "Feeling disconnected."
+
+4. SITUATIONAL FACTORS — The person describes specific life circumstances causing loneliness such as living alone, weekends/holidays, bereavement, illness, retirement, or relocation. Look for: "empty house", "weekends", "Christmas", "after partner died", "moved to new area", "retired".
+   Examples:
+   - "Going home to a empty house. Doing things on your own. Having no one to talk to when you have a bad day at work."
+   - "Not having people whom I can be with at weekends easter christmas or other non-work days."
+   - "A mental state. Physically not being near someone, especially at home."
+
+5. EMOTIONAL DISTRESS — The person primarily describes raw emotions: sadness, pain, depression, despair, or suffering WITHOUT specific situational or social context. This should ONLY be chosen when the text is purely about emotions. Look for: "sadness", "pain", "depressed", "despair", "hurts", "horrible feeling".
+   Examples:
+   - "Sadness. Detachment."
+   - "Sadness. Irritating. Tired."
+   - "A dreadful, horrible painful experience."
+
+IMPORTANT RULES:
+- Social Connection is the most common theme — if someone describes lacking people or companionship, choose Social Connection, NOT Emotional Distress.
+- Choose Emotional Distress ONLY when the text is purely about emotions/feelings without describing social, situational, or communication aspects.
+- If the text mentions specific life situations (house, work, holidays), choose Situational Factors.
+- If the text emphasises not being understood or inability to express, choose Communication Barriers.
+- If the text describes deep disconnection or alienation, choose Existential Loneliness."""
+
+# GPT theme classification using structured prompt
+def classify_with_gpt(text):
+    """Send text to GPT and get a theme classification with confidence scores."""
+    user_prompt = f"""Classify this text into exactly ONE of the 5 loneliness themes.
+
+Text: "{text}"
+
+Respond in EXACTLY this format (no extra text):
+THEME: <one of: Emotional Distress, Situational Factors, Existential Loneliness, Social Connection, Communication Barriers>
+SCORES: <5 comma-separated confidence percentages that sum to 100, in order: Emotional Distress, Situational Factors, Existential Loneliness, Social Connection, Communication Barriers>"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model=GPT_MODEL,
+            messages=[
+                {"role": "system", "content": GPT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_completion_tokens=2000
+        )
+        reply = response.choices[0].message.content
+        if not reply:
+            print(f"GPT returned empty content. Finish reason: {response.choices[0].finish_reason}")
+            return "Unclassified", [20.0, 20.0, 20.0, 20.0, 20.0]
+        reply = reply.strip()
+        
+        # Parse the response
+        lines = reply.split('\n')
+        theme = None
+        scores = [20.0, 20.0, 20.0, 20.0, 20.0]  # default equal scores
+        
+        for line in lines:
+            if line.upper().startswith('THEME:'):
+                theme = line.split(':', 1)[1].strip()
+            elif line.upper().startswith('SCORES:'):
+                try:
+                    score_str = line.split(':', 1)[1].strip()
+                    scores = [float(s.strip().replace('%', '')) for s in score_str.split(',')]
+                    if len(scores) != 5:
+                        scores = [20.0, 20.0, 20.0, 20.0, 20.0]
+                except:
+                    scores = [20.0, 20.0, 20.0, 20.0, 20.0]
+        
+        # Validate theme — fuzzy match to valid themes
+        if theme not in VALID_THEMES:
+            for valid in VALID_THEMES:
+                if valid.lower() in theme.lower():
+                    theme = valid
+                    break
+            else:
+                theme = VALID_THEMES[scores.index(max(scores))]
+        
+        return theme, [round(s, 2) for s in scores]
+    except Exception as e:
+        print(f"GPT Error: {e}")
+        return "Unclassified", [20.0, 20.0, 20.0, 20.0, 20.0]
+
+# GPT classification for evaluation (theme name only, no scores needed)
+def classify_with_gpt_simple(text):
+    """Simplified GPT call for batch evaluation — returns theme name only."""
+    user_prompt = f"""Classify this text into exactly ONE loneliness theme. Reply with ONLY the theme name, nothing else.
+
+Text: "{text}"
+"""
+    try:
+        response = openai_client.chat.completions.create(
+            model=GPT_MODEL,
+            messages=[
+                {"role": "system", "content": GPT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_completion_tokens=1000
+        )
+        theme = response.choices[0].message.content
+        if not theme:
+            return "Unclassified"
+        theme = theme.strip()
+        # Clean up any extra formatting
+        for valid in VALID_THEMES:
+            if valid.lower() in theme.lower():
+                return valid
+        return "Unclassified"
+    except Exception as e:
+        print(f"GPT Error: {e}")
+        return "Unclassified"
 
 @app.route('/')
 def index():
@@ -65,6 +202,8 @@ def run_analysis():
     # Defaults
     assigned_id = 0
     strength_scores = []
+    final_theme = "Unclassified"
+
     #Logic for  (NMF & LDA)
     if selected_model in ['NMF', 'LDA']:
         current_engine = nmf_engine if selected_model == 'NMF' else lda_engine
@@ -74,6 +213,8 @@ def run_analysis():
         
         assigned_id = int(raw_outputs.argmax())
         strength_scores = [round(x * 100, 2) for x in calculate_probabilities(raw_outputs)]
+        final_theme = THEME_LABELS.get(assigned_id, "Unclassified")
+
     #Logic for Transformer Model
     elif selected_model == 'BERTopic':
         found_topics, probabilities = bert_engine.transform([input_text])
@@ -86,8 +227,11 @@ def run_analysis():
             assigned_id = int(probabilities[0].argmax())
         #extracting the scores for the 5 themes    
         strength_scores = [round(float(x) * 100, 2) for x in probabilities[0][:5]]
-    # Map the numeric ID to the final string theme
-    final_theme = THEME_LABELS.get(assigned_id, "Unclassified")
+        final_theme = THEME_LABELS.get(assigned_id, "Unclassified")
+
+    # Logic for GPT Model
+    elif selected_model == 'GPT':
+        final_theme, strength_scores = classify_with_gpt(input_text)
 
     # Logging to history.db
     conn = sqlite3.connect('history.db')
@@ -127,7 +271,7 @@ def compare_models():
 
     theme_names = list(THEME_LABELS.values())
 
-    # --- Run all 3 models ---
+    # --- Run all 4 models ---
     predictions = {}
 
     # NMF
@@ -149,6 +293,16 @@ def compare_models():
             assigned_id = int(probabilities[i].argmax())
         bert_preds.append(THEME_LABELS.get(assigned_id, "Unclassified"))
     predictions['BERTopic'] = bert_preds
+
+    # GPT — classify each text one by one
+    print("Running GPT Predictions on test data... (this may take a few minutes)")
+    gpt_preds = []
+    for i, text in enumerate(texts):
+        theme = classify_with_gpt_simple(text)
+        gpt_preds.append(theme)
+        if (i + 1) % 20 == 0:
+            print(f"  GPT: {i+1}/{len(texts)} done...")
+    predictions['GPT'] = gpt_preds
 
     # --- Compute metrics ---
     metrics = {}
