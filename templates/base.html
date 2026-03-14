@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Loneliness Topic Modeller{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        /* Navbar */
+        .navbar-glass {
+            background: rgba(15, 12, 41, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .navbar-brand {
+            font-weight: 800;
+            background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-link {
+            color: #c9b0ff !important;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: #ffffff !important;
+        }
+
+        /* Containers */
+        .main-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* Glass cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 30px;
+            transition: transform 0.2s ease;
+        }
+
+        .glass-card h3,
+        .glass-card h4 {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        /* Buttons */
+        .btn-glass-primary {
+            background: linear-gradient(90deg, #7b2ff7, #00d2ff);
+            border: none;
+            color: white;
+            font-weight: 600;
+            border-radius: 12px;
+            padding: 10px 24px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-glass-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(123, 47, 247, 0.3);
+            color: white;
+        }
+
+        .btn-glass-outline {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            font-weight: 500;
+            border-radius: 12px;
+        }
+
+        .btn-glass-outline:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        /* Forms */
+        .form-control,
+        .form-select {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-radius: 12px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            background: rgba(0, 0, 0, 0.3);
+            border-color: #7b2ff7;
+            box-shadow: 0 0 0 0.25rem rgba(123, 47, 247, 0.25);
+            color: #ffffff;
+        }
+
+        /* Fix select options text color on dark theme */
+        .form-select option {
+            background-color: #24243e;
+            color: white;
+        }
+
+        .form-label {
+            color: #8e8ea0;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Alerts */
+        .alert-glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 12px;
+        }
+
+            {
+            % block extra_css %
+        }
+
+            {
+            % endblock %
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Unified Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-glass sticky-top">
+        <div class="container-fluid max-w-1300">
+            <a class="navbar-brand fs-4" href="/">Loneliness Analyzer</a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" href="/compare">Model Comparison</a>
+                    </li>
+
+                    {% if session.get('user_id') %}
+                    <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+                        <span class="text-light me-3 opacity-75">Logged in as <strong>{{ session.get('username')
+                                }}</strong></span>
+                        <a class="btn btn-glass-outline btn-sm" href="/logout">Logout</a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+                        <a class="btn btn-glass-outline btn-sm me-2" href="/login">Login</a>
+                        <a class="btn btn-glass-primary btn-sm" href="/register">Register</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    <div class="container-fluid main-container pt-3 pb-0">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-glass alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="container-fluid main-container pt-0">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

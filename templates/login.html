@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Login — Loneliness Topic Modeller{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="glass-card text-center">
+            <h3 class="mb-4">Welcome Back</h3>
+            <p class="text-muted mb-4">Please log in to view your analysis history.</p>
+
+            <form action="/login" method="POST">
+                <div class="mb-3 text-start">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" name="username" required autofocus>
+                </div>
+
+                <div class="mb-4 text-start">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" name="password" required>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-glass-primary">Log In</button>
+                </div>
+            </form>
+
+            <div class="mt-4">
+                <p class="text-muted small">Don't have an account? <a href="/register"
+                        class="text-info text-decoration-none">Register here</a>.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

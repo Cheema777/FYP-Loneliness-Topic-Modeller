@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, session, flash, url_for
 import joblib
 from bertopic import BERTopic
 import sqlite3
@@ -9,24 +9,46 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24) # Secret key for sessions
 
 # OpenAI client setup
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 GPT_MODEL = "gpt-5-mini-2025-08-07"
 
-# Basic database setup for the history log
+# Basic database setup for the history log and users
 def init_db():
     conn = sqlite3.connect('history.db')
     c = conn.cursor()
-    # Table structure for tracking user inputs and AI interpretations
+    
+    # Check if we need to migrate analysis_history to have user_id
+    c.execute("PRAGMA table_info(analysis_history)")
+    columns = [column[1] for column in c.fetchall()]
+    
+    if "user_id" not in columns and len(columns) > 0:
+        # Schema is old, we need to drop it and recreate it.
+        c.execute('DROP TABLE IF EXISTS analysis_history')
+
+    # Create users table
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE NOT NULL,
+                  password_hash TEXT NOT NULL)''')
+                  
+    # Create analysis_history table linked to user
     c.execute('''CREATE TABLE IF NOT EXISTS analysis_history
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  timestamp TEXT, user_text TEXT, 
-                  model_used TEXT, detected_theme TEXT)''')
+                  user_id INTEGER NOT NULL,
+                  timestamp TEXT, 
+                  user_text TEXT, 
+                  model_used TEXT, 
+                  detected_theme TEXT,
+                  FOREIGN KEY(user_id) REFERENCES users(id))''')
     conn.commit()
     conn.close()
 
@@ -185,17 +207,77 @@ Text: "{text}"
         print(f"GPT Error: {e}")
         return "Unclassified"
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = sqlite3.connect('history.db')
+        c = conn.cursor()
+        
+        # Check if username exists
+        c.execute("SELECT id FROM users WHERE username = ?", (username,))
+        if c.fetchone():
+            flash('Username already exists. Please choose a different one.')
+            conn.close()
+            return redirect(url_for('register'))
+            
+        password_hash = generate_password_hash(password)
+        c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, password_hash))
+        conn.commit()
+        conn.close()
+        
+        flash('Registration successful. Please log in.')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        conn = sqlite3.connect('history.db')
+        c = conn.cursor()
+        c.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user[1], password):
+            session['user_id'] = user[0]
+            session['username'] = username
+            return redirect(url_for('index'))
+            
+        flash('Invalid username or password.')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
-    # Fetching history to show in the side panel
+    # Fetching history to show in the side panel for the logged in user
     conn = sqlite3.connect('history.db')
     db_cursor = conn.cursor()
-    db_cursor.execute("SELECT * FROM analysis_history ORDER BY id DESC")
+    db_cursor.execute("SELECT * FROM analysis_history WHERE user_id = ? ORDER BY id DESC", (session['user_id'],))
     history_data = db_cursor.fetchall()
     conn.close()
     return render_template('index.html', history=history_data)
 
 @app.route('/predict', methods=['POST'])
+@login_required
 def run_analysis():
     input_text = request.form['message']
     selected_model = request.form['model_choice']
@@ -233,14 +315,14 @@ def run_analysis():
     elif selected_model == 'GPT':
         final_theme, strength_scores = classify_with_gpt(input_text)
 
-    # Logging to history.db
+    # Logging to history.db with user_id
     conn = sqlite3.connect('history.db')
     db_cursor = conn.cursor()
-    db_cursor.execute("INSERT INTO analysis_history (timestamp, user_text, model_used, detected_theme) VALUES (?, ?, ?, ?)",
-                      (datetime.now().strftime("%H:%M - %d %b"), input_text, selected_model, final_theme))
+    db_cursor.execute("INSERT INTO analysis_history (user_id, timestamp, user_text, model_used, detected_theme) VALUES (?, ?, ?, ?, ?)",
+                      (session['user_id'], datetime.now().strftime("%H:%M - %d %b"), input_text, selected_model, final_theme))
     conn.commit()
-    # reload so the new result appear immediately
-    db_cursor.execute("SELECT * FROM analysis_history ORDER BY id DESC")
+    # reload so the new result appear immediately for this user
+    db_cursor.execute("SELECT * FROM analysis_history WHERE user_id = ? ORDER BY id DESC", (session['user_id'],))
     updated_history = db_cursor.fetchall()
     conn.close()
 
@@ -252,11 +334,12 @@ def run_analysis():
                            chart_data=strength_scores)
 
 @app.route('/clear', methods=['POST'])
+@login_required
 def reset_history():
-    #function to wipe the database for a fresh test run
+    #function to wipe the database history for the current user
     conn = sqlite3.connect('history.db')
     db_cursor = conn.cursor()
-    db_cursor.execute("DELETE FROM analysis_history")
+    db_cursor.execute("DELETE FROM analysis_history WHERE user_id = ?", (session['user_id'],))
     conn.commit()
     conn.close()
     return redirect('/')
