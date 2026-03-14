@@ -263,64 +263,21 @@ def reset_history():
 
 @app.route('/compare')
 def compare_models():
-    # Load test dataset
-    test_df = pd.read_csv('data/test_dataset.csv')
-    test_df = test_df.dropna(subset=['True_Theme'])
-    texts = test_df['Text'].tolist()
-    true_labels = test_df['True_Theme'].tolist()
+    import json
+    import os
 
-    theme_names = list(THEME_LABELS.values())
+    results_path = os.path.join(os.path.dirname(__file__), 'data', 'model_results.json')
+    
+    # Check if cache exists
+    if not os.path.exists(results_path):
+        return "Model results not pre-computed yet. Please run evaluate_models.py first.", 500
+        
+    with open(results_path, 'r') as f:
+        results_data = json.load(f)
 
-    # --- Run all 4 models ---
-    predictions = {}
-
-    # NMF
-    text_vectors = vectorizer.transform(texts)
-    nmf_raw = nmf_engine.transform(text_vectors)
-    predictions['NMF'] = [THEME_LABELS.get(int(row.argmax()), "Unclassified") for row in nmf_raw]
-
-    # LDA
-    lda_raw = lda_engine.transform(text_vectors)
-    predictions['LDA'] = [THEME_LABELS.get(int(row.argmax()), "Unclassified") for row in lda_raw]
-
-    # BERTopic
-    found_topics, probabilities = bert_engine.transform(texts)
-    bert_preds = []
-    for i in range(len(texts)):
-        if found_topics[i] != -1:
-            assigned_id = int(found_topics[i])
-        else:
-            assigned_id = int(probabilities[i].argmax())
-        bert_preds.append(THEME_LABELS.get(assigned_id, "Unclassified"))
-    predictions['BERTopic'] = bert_preds
-
-    # GPT — classify each text one by one
-    print("Running GPT Predictions on test data... (this may take a few minutes)")
-    gpt_preds = []
-    for i, text in enumerate(texts):
-        theme = classify_with_gpt_simple(text)
-        gpt_preds.append(theme)
-        if (i + 1) % 20 == 0:
-            print(f"  GPT: {i+1}/{len(texts)} done...")
-    predictions['GPT'] = gpt_preds
-
-    # --- Compute metrics ---
-    metrics = {}
-    conf_matrices = {}
-    for model_name, preds in predictions.items():
-        acc = accuracy_score(true_labels, preds)
-        prec = precision_score(true_labels, preds, average='weighted', zero_division=0)
-        rec = recall_score(true_labels, preds, average='weighted', zero_division=0)
-        f1 = f1_score(true_labels, preds, average='weighted', zero_division=0)
-        metrics[model_name] = {
-            'accuracy': round(acc * 100, 2),
-            'precision': round(prec * 100, 2),
-            'recall': round(rec * 100, 2),
-            'f1': round(f1 * 100, 2)
-        }
-        # Confusion matrix (rows = true, cols = predicted)
-        cm = confusion_matrix(true_labels, preds, labels=theme_names)
-        conf_matrices[model_name] = cm.tolist()
+    metrics = results_data['metrics']
+    conf_matrices = results_data['conf_matrices']
+    theme_names = results_data['theme_names']
 
     return render_template('compare.html',
                            metrics=metrics,

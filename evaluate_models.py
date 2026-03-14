@@ -151,20 +151,54 @@ Text: "{text}"
     if (i + 1) % 20 == 0:
         print(f"  GPT: {i+1}/{len(texts)} done...")
 
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+import json
+
 print("\n" + "="*50)
 print("             MODEL EVALUATION REPORT              ")
 print("="*50)
 
+metrics = {}
+conf_matrices = {}
+theme_names = list(THEME_LABELS.values())
+
 for model_name, preds in predictions.items():
+    print(f"\n--- {model_name} Model ---")
+    
+    # Calculate metrics
     acc = accuracy_score(true_labels, preds)
-    # Using 'weighted' since themes might be imbalanced
     prec = precision_score(true_labels, preds, average='weighted', zero_division=0)
     rec = recall_score(true_labels, preds, average='weighted', zero_division=0)
     f1 = f1_score(true_labels, preds, average='weighted', zero_division=0)
     
-    print(f"\n{model_name} Model:")
-    print(f"  Accuracy:  {acc:.4f} ({acc*100:.2f}%)")
-    print(f"  Precision: {prec:.4f} ({prec*100:.2f}%)")
-    print(f"  Recall:    {rec:.4f} ({rec*100:.2f}%)")
-    print(f"  F1-Score:  {f1:.4f} ({f1*100:.2f}%)")
-print("="*50)
+    print(f"Accuracy:  {acc:.4f} ({acc*100:.2f}%)")
+    print(f"Precision: {prec:.4f} ({prec*100:.2f}%)")
+    print(f"Recall:    {rec:.4f} ({rec*100:.2f}%)")
+    print(f"F1-Score:  {f1:.4f} ({f1*100:.2f}%)")
+
+    metrics[model_name] = {
+        'accuracy': round(acc * 100, 2),
+        'precision': round(prec * 100, 2),
+        'recall': round(rec * 100, 2),
+        'f1': round(f1 * 100, 2)
+    }
+
+    # Confusion matrix
+    cm = confusion_matrix(true_labels, preds, labels=theme_names)
+    conf_matrices[model_name] = cm.tolist()
+
+print("\n" + "="*50)
+
+# Save results to JSON cache
+results_data = {
+    'metrics': metrics,
+    'conf_matrices': conf_matrices,
+    'theme_names': theme_names
+}
+
+results_path = os.path.join(os.path.dirname(__file__), 'data', 'model_results.json')
+with open(results_path, 'w') as f:
+    json.dump(results_data, f, indent=4)
+
+print(f"Saved evaluation results to {results_path}")
+print("The /compare route will now load instantly from this cache.")
